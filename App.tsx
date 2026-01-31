@@ -24,11 +24,12 @@ import Demands from './pages/Demands';
 import Logs from './pages/Logs';
 import Departments from './pages/Departments';
 import GpuModels from './pages/GpuModels';
+import Login from './pages/Login';
 
 // Auth Context
 interface AuthContextType {
   currentUser: User | null;
-  login: (username: string) => void;
+  login: (username: string, password?: string) => Promise<boolean>;
   logout: () => void;
   hasPermission: (module: string) => boolean;
 }
@@ -42,12 +43,19 @@ export const useAuth = () => {
 };
 
 const App: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<User | null>(MOCK_USERS[0]); // Default to Admin for demo
+  const [currentUser, setCurrentUser] = useState<User | null>(null); // 初始改为 null
   const [activeTab, setActiveTab] = useState('dashboard');
 
-  const login = (username: string) => {
-    const user = MOCK_USERS.find(u => u.username === username);
-    if (user) setCurrentUser(user);
+  const login = async (username: string, password?: string): Promise<boolean> => {
+    // 模拟后端延时
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    const user = MOCK_USERS.find(u => u.username === username && u.password === password);
+    if (user) {
+      setCurrentUser(user);
+      return true;
+    }
+    return false;
   };
 
   const logout = () => setCurrentUser(null);
@@ -85,31 +93,7 @@ const App: React.FC = () => {
   const filteredMenuItems = menuItems.filter(item => hasPermission(item.permission));
 
   if (!currentUser) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md">
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold text-slate-900">富脊超算CRM</h1>
-            <p className="text-slate-500 mt-2">请选择身份进入演示环境</p>
-          </div>
-          <div className="space-y-3">
-            {MOCK_USERS.map(user => (
-              <button
-                key={user.id}
-                onClick={() => login(user.username)}
-                className="w-full flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:border-indigo-500 hover:bg-indigo-50 transition-all group"
-              >
-                <div className="text-left">
-                  <div className="font-semibold text-slate-800">{user.realName}</div>
-                  <div className="text-xs text-slate-500">{user.role} - {user.username}</div>
-                </div>
-                <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-indigo-600" />
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
+    return <Login onLogin={login} />;
   }
 
   return (

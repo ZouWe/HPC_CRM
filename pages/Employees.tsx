@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Plus, 
   Search, 
@@ -10,7 +10,8 @@ import {
   X,
   UserPlus,
   UserCog,
-  AlertTriangle
+  AlertTriangle,
+  AlertCircle
 } from 'lucide-react';
 import { MOCK_USERS, MOCK_DEPARTMENTS } from '../constants';
 import { User, RoleType } from '../types';
@@ -41,6 +42,13 @@ const Employees: React.FC = () => {
     status: 'ENABLE' as 'ENABLE' | 'DISABLE'
   };
   const [formData, setFormData] = useState(initialFormState);
+
+  // Check for duplicate username (case-insensitive)
+  const isUsernameDuplicate = useMemo(() => {
+    if (editingUserId) return false;
+    if (!formData.username.trim()) return false;
+    return users.some(u => !u.deleteFlag && u.username.toLowerCase() === formData.username.trim().toLowerCase());
+  }, [formData.username, users, editingUserId]);
 
   // Filter out soft-deleted users and apply search
   const filteredUsers = users.filter(u => 
@@ -73,6 +81,10 @@ const Employees: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!editingUserId && isUsernameDuplicate) {
+      return;
+    }
     
     if (editingUserId) {
       setUsers(users.map(u => u.id === editingUserId ? {
@@ -87,7 +99,7 @@ const Employees: React.FC = () => {
     } else {
       const newUser: User = {
         id: `U${Date.now()}`,
-        username: formData.username,
+        username: formData.username.trim(),
         realName: formData.realName,
         phone: formData.phone,
         email: formData.email,
@@ -271,15 +283,28 @@ const Employees: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-slate-700">登录账号 <span className="text-rose-500">*</span></label>
-                    <input 
-                      required
-                      type="text" 
-                      placeholder="字母+数字, 6-20位"
-                      disabled={!!editingUserId}
-                      className={`w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none ${editingUserId ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-slate-50'}`}
-                      value={formData.username}
-                      onChange={e => setFormData({...formData, username: e.target.value})}
-                    />
+                    <div className="relative">
+                      <input 
+                        required
+                        type="text" 
+                        placeholder="字母+数字, 6-20位"
+                        disabled={!!editingUserId}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 outline-none transition-all ${
+                          editingUserId 
+                            ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-200' 
+                            : isUsernameDuplicate 
+                              ? 'bg-rose-50 border-rose-300 focus:ring-rose-100' 
+                              : 'bg-slate-50 border-slate-200 focus:ring-indigo-500'
+                        }`}
+                        value={formData.username}
+                        onChange={e => setFormData({...formData, username: e.target.value})}
+                      />
+                    </div>
+                    {isUsernameDuplicate && (
+                      <p className="text-[10px] text-rose-500 mt-1 flex items-center gap-1 font-bold animate-in fade-in slide-in-from-top-1">
+                        <AlertCircle className="w-3 h-3" /> 账号已存在，请更换
+                      </p>
+                    )}
                     {editingUserId && <p className="text-[10px] text-slate-400 mt-1">编辑模式下账号不可修改</p>}
                   </div>
                   <div className="space-y-1.5">
@@ -391,7 +416,12 @@ const Employees: React.FC = () => {
               <button 
                 type="submit"
                 form="employeeForm"
-                className="px-6 py-2 text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg transition-colors shadow-sm"
+                disabled={!editingUserId && isUsernameDuplicate}
+                className={`px-6 py-2 text-sm font-medium text-white rounded-lg transition-colors shadow-sm ${
+                  !editingUserId && isUsernameDuplicate 
+                    ? 'bg-slate-300 cursor-not-allowed' 
+                    : 'bg-indigo-600 hover:bg-indigo-700'
+                }`}
               >
                 {editingUserId ? '保存修改' : '保存员工'}
               </button>

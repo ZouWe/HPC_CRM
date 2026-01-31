@@ -9,6 +9,7 @@ export enum RoleType {
 export interface User {
   id: string;
   username: string;
+  password?: string; // 增加密码字段
   realName: string;
   phone: string;
   email?: string;

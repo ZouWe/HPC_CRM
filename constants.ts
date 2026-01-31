@@ -63,6 +63,7 @@ export const MOCK_USERS: User[] = [
   {
     id: 'U1',
     username: 'admin',
+    password: '123456',
     realName: '超级管理员',
     phone: '13800000000',
     email: 'admin@fuji.com',
@@ -76,6 +77,7 @@ export const MOCK_USERS: User[] = [
   {
     id: 'U2',
     username: 'manager_zhang',
+    password: '123456',
     realName: '张主管',
     phone: '13811111111',
     department: '销售一部',
@@ -89,6 +91,7 @@ export const MOCK_USERS: User[] = [
   {
     id: 'U3',
     username: 'sales_li',
+    password: '123456',
     realName: '李销售',
     phone: '13822222222',
     department: '销售部',
@@ -102,6 +105,7 @@ export const MOCK_USERS: User[] = [
   {
     id: 'U4',
     username: 'director_wang',
+    password: '123456',
     realName: '王总监',
     phone: '13833333333',
     department: '销售部',

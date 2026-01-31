@@ -1,0 +1,5 @@
+{
+  "name": "富脊超算CRM需求管理系统",
+  "description": "GPU服务器租赁/采购/项目类需求全生命周期管理系统，支持精细化权限管控与数据隔离审计。",
+  "requestFramePermissions": []
+}

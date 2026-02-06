@@ -71,6 +71,8 @@ export interface GpuModel {
   serverType: string; // 服务器规格，如 8卡, 4卡
   tflops?: string; // 算力
   status: 'AVAILABLE' | 'SHORTAGE' | 'UNAVAILABLE';
+  rentalPrice?: string; // 裸金属租赁价格
+  salePrice?: string; // 售卖价格
   creatorId: string;
   createTime: string;
   deleteFlag: boolean;
@@ -109,6 +111,8 @@ export interface RentalDemand extends BaseDemand {
   deliveryTime: string;
   paymentMethod: string;
   budgetPerMonth: string;
+  cost?: string; // 成本 (台/月)
+  purchasingTime?: string; // 采购时间
   source?: string;
   region: string;
 }

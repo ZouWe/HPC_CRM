@@ -18,6 +18,8 @@ export const MOCK_GPU_MODELS: GpuModel[] = [
     serverType: '8卡 SXM5',
     tflops: '67 TFLOPS (FP64)',
     status: 'AVAILABLE',
+    rentalPrice: '¥65,000-¥75,000/月',
+    salePrice: '¥280-¥310万',
     creatorId: 'U1',
     createTime: '2023-12-01 10:00:00',
     deleteFlag: false
@@ -30,6 +32,8 @@ export const MOCK_GPU_MODELS: GpuModel[] = [
     serverType: '8卡 SXM4',
     tflops: '19.5 TFLOPS (FP64)',
     status: 'SHORTAGE',
+    rentalPrice: '¥38,000-¥42,000/月',
+    salePrice: '¥110-¥125万',
     creatorId: 'U1',
     createTime: '2023-01-15 14:00:00',
     deleteFlag: false
@@ -41,6 +45,8 @@ export const MOCK_GPU_MODELS: GpuModel[] = [
     vram: '80GB HBM2e',
     serverType: '8卡 NVLink',
     status: 'AVAILABLE',
+    rentalPrice: '¥32,000-¥35,000/月',
+    salePrice: '¥95-¥105万',
     creatorId: 'U1',
     createTime: '2023-06-20 09:30:00',
     deleteFlag: false
@@ -139,6 +145,17 @@ export const MOCK_CUSTOMERS: Customer[] = [
     teamId: 'T1',
     createTime: '2023-11-15 14:20:00',
     deleteFlag: false
+  },
+  {
+    id: 'C3',
+    name: '王总',
+    title: 'CEO',
+    phone: '13666666666',
+    role: 'DIRECT',
+    creatorId: 'U2',
+    teamId: 'T1',
+    createTime: '2023-11-20 09:00:00',
+    deleteFlag: false
   }
 ];
 
@@ -180,7 +197,7 @@ export const MOCK_RENTAL_DEMANDS: RentalDemand[] = [
     creatorId: 'U3',
     teamId: 'T1',
     status: DemandStatus.PENDING,
-    type: '战略商机',
+    type: '战略商商机',
     createTime: '2024-01-27 10:00:00',
     deleteFlag: false,
     serverCount: 8,
@@ -190,6 +207,8 @@ export const MOCK_RENTAL_DEMANDS: RentalDemand[] = [
     deliveryTime: '2024-03-01',
     paymentMethod: '季付',
     budgetPerMonth: '6万/台/月',
+    cost: '4.5万/台/月',
+    purchasingTime: '2024-02-15',
     region: '北京'
   }
 ];

@@ -214,9 +214,9 @@ const Demands: React.FC = () => {
                   <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-tighter">P数/性质</th>
                 )}
                 <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-tighter">
-                  {activeSubTab === 'RENTAL' ? '租期/预算' : activeSubTab === 'PURCHASE' ? '预算' : '交付机房'}
+                  {activeSubTab === 'RENTAL' ? '租期/财务' : activeSubTab === 'PURCHASE' ? '预算' : '交付机房'}
                 </th>
-                <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-tighter">交付时间</th>
+                <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-tighter">时间信息</th>
                 <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-tighter">进度</th>
                 <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-tighter text-right">操作</th>
               </tr>
@@ -245,11 +245,32 @@ const Demands: React.FC = () => {
                   {/* ... (Other tabs table cells) */}
                   
                   <td className="px-6 py-4 text-sm font-bold">
-                     {activeSubTab === 'RENTAL' ? (demand as RentalDemand).duration : (demand as any).budgetTotal || (demand as any).dataCenter}
+                     {activeSubTab === 'RENTAL' ? (
+                       <div className="space-y-0.5">
+                         <p className="text-slate-900">{(demand as RentalDemand).duration}</p>
+                         <p className="text-xs text-indigo-600 font-bold" title="客户预算">预算: {(demand as RentalDemand).budgetPerMonth}</p>
+                         {(demand as RentalDemand).cost && (
+                           <p className="text-[10px] text-slate-400 font-normal" title="成本">成本: {(demand as RentalDemand).cost}</p>
+                         )}
+                       </div>
+                     ) : (
+                       (demand as any).budgetTotal || (demand as any).dataCenter
+                     )}
                   </td>
 
                   <td className="px-6 py-4 text-sm text-slate-900">
-                    {activeSubTab === 'PROJECT' ? (demand as ProjectDemand).deadline : (demand as any).deliveryTime}
+                    {activeSubTab === 'RENTAL' ? (
+                      <div>
+                        <p className="font-bold">{(demand as RentalDemand).deliveryTime}</p>
+                        {(demand as RentalDemand).purchasingTime && (
+                          <p className="text-[10px] text-slate-400 mt-0.5" title="采购时间">
+                            采购: {(demand as RentalDemand).purchasingTime}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      activeSubTab === 'PROJECT' ? (demand as ProjectDemand).deadline : (demand as any).deliveryTime
+                    )}
                   </td>
 
                   <td className="px-6 py-4">
@@ -439,7 +460,7 @@ const Demands: React.FC = () => {
                 <h4 className="flex items-center gap-2 text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em]">
                   <Calendar className="w-4 h-4" /> 时间信息
                 </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="space-y-1.5">
                     <label className="text-xs font-black text-slate-700 uppercase">预期租期 <span className="text-rose-500">*</span></label>
                     <input 
@@ -461,6 +482,15 @@ const Demands: React.FC = () => {
                       onChange={e => setRentalFormData({...rentalFormData, deliveryTime: e.target.value})}
                     />
                   </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700 uppercase">采购时间</label>
+                    <input 
+                      type="date" 
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold"
+                      value={rentalFormData.purchasingTime || ''}
+                      onChange={e => setRentalFormData({...rentalFormData, purchasingTime: e.target.value})}
+                    />
+                  </div>
                 </div>
               </section>
 
@@ -469,7 +499,7 @@ const Demands: React.FC = () => {
                 <h4 className="flex items-center gap-2 text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em]">
                   <CreditCard className="w-4 h-4" /> 成本信息
                 </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="space-y-1.5">
                     <label className="text-xs font-black text-slate-700 uppercase">付款方式 <span className="text-rose-500">*</span></label>
                     <select 
@@ -494,6 +524,16 @@ const Demands: React.FC = () => {
                       className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold"
                       value={rentalFormData.budgetPerMonth}
                       onChange={e => setRentalFormData({...rentalFormData, budgetPerMonth: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700 uppercase">成本 <span className="text-slate-400 font-normal">(台/月)</span></label>
+                    <input 
+                      type="text" 
+                      placeholder="如: 4.5万/台/月" 
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold"
+                      value={rentalFormData.cost || ''}
+                      onChange={e => setRentalFormData({...rentalFormData, cost: e.target.value})}
                     />
                   </div>
                 </div>

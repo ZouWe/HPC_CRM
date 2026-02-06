@@ -14,7 +14,6 @@ import {
   Server
 } from 'lucide-react';
 import { User, RoleType } from './types';
-import { MOCK_USERS } from './constants';
 import Dashboard from './pages/Dashboard';
 import Employees from './pages/Employees';
 import Roles from './pages/Roles';
@@ -25,6 +24,7 @@ import Logs from './pages/Logs';
 import Departments from './pages/Departments';
 import GpuModels from './pages/GpuModels';
 import Login from './pages/Login';
+import { api } from './api';
 
 // Auth Context
 interface AuthContextType {
@@ -43,14 +43,11 @@ export const useAuth = () => {
 };
 
 const App: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null); // 初始改为 null
+  const [currentUser, setCurrentUser] = useState<User | null>(null); 
   const [activeTab, setActiveTab] = useState('dashboard');
 
   const login = async (username: string, password?: string): Promise<boolean> => {
-    // 模拟后端延时
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    const user = MOCK_USERS.find(u => u.username === username && u.password === password);
+    const user = await api.auth.login(username, password);
     if (user) {
       setCurrentUser(user);
       return true;
@@ -62,18 +59,21 @@ const App: React.FC = () => {
 
   const hasPermission = (module: string): boolean => {
     if (!currentUser) return false;
+    // Handled separately because ADMIN has all permissions
     if (currentUser.role === RoleType.ADMIN) return true;
 
     const role = currentUser.role;
+    // Since we returned true if role is ADMIN above, role is now strictly non-ADMIN roles here
     switch (module) {
+      // Fix: Removed redundant RoleType.ADMIN comparisons to resolve "no overlap" type errors
       case 'employees': return false;
       case 'roles': return false;
       case 'departments': return false;
-      case 'logs': return [RoleType.ADMIN, RoleType.SALES_DIRECTOR].includes(role);
-      case 'gpu_models': return true; // 所有角色均可查看，但编辑权限在页面内控制
+      case 'logs': return role === RoleType.SALES_DIRECTOR;
+      case 'gpu_models': return true; 
       case 'payment_methods':
-      case 'demand_categories': return [RoleType.ADMIN, RoleType.SALES_DIRECTOR, RoleType.SALES_MANAGER].includes(role);
-      case 'demand_status': return [RoleType.ADMIN, RoleType.SALES_DIRECTOR].includes(role);
+      case 'demand_categories': return [RoleType.SALES_DIRECTOR, RoleType.SALES_MANAGER].includes(role as any);
+      case 'demand_status': return role === RoleType.SALES_DIRECTOR;
       default: return true;
     }
   };
@@ -99,7 +99,6 @@ const App: React.FC = () => {
   return (
     <AuthContext.Provider value={{ currentUser, login, logout, hasPermission }}>
       <div className="flex h-screen bg-slate-50 text-slate-900">
-        {/* Sidebar */}
         <aside className="w-64 bg-slate-900 flex flex-col">
           <div className="p-6 border-b border-slate-800">
             <h1 className="text-xl font-bold text-white flex items-center gap-2">
@@ -107,7 +106,7 @@ const App: React.FC = () => {
               富脊超算CRM
             </h1>
           </div>
-          <nav className="flex-1 p-4 space-y-1">
+          <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
             {filteredMenuItems.map(item => (
               <button
                 key={item.id}
@@ -143,7 +142,6 @@ const App: React.FC = () => {
           </div>
         </aside>
 
-        {/* Main Content */}
         <main className="flex-1 flex flex-col overflow-hidden">
           <header className="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between flex-shrink-0">
             <h2 className="text-lg font-semibold text-slate-800">

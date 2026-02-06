@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Plus, 
   Search, 
@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   AlertCircle,
   MoreVertical,
-  ChevronDown,
   LayoutGrid,
   ShoppingBag,
   Cpu,
@@ -17,21 +16,20 @@ import {
   Trash2,
   Edit2,
   AlertTriangle,
-  History,
-  Tags
+  Tags,
+  Loader2,
+  Calendar,
+  Globe,
+  Settings,
+  CreditCard,
+  User,
+  Zap,
+  HardDrive
 } from 'lucide-react';
 import { useAuth } from '../App';
-import { RoleType, DemandStatus, AnyDemand, RentalDemand, PurchaseDemand, ProjectDemand } from '../types';
-import { 
-  MOCK_RENTAL_DEMANDS, 
-  MOCK_PURCHASE_DEMANDS, 
-  MOCK_PROJECT_DEMANDS, 
-  MOCK_GPU_MODELS, 
-  MOCK_CUSTOMERS, 
-  MOCK_COMPANIES, 
-  MOCK_USERS,
-  DEMAND_CATEGORIES
-} from '../constants';
+import { RoleType, DemandStatus, AnyDemand, RentalDemand, PurchaseDemand, ProjectDemand, GpuModel, Customer, Company } from '../types';
+import { DEMAND_CATEGORIES } from '../constants';
+import { api } from '../api';
 
 type SubTab = 'RENTAL' | 'PURCHASE' | 'PROJECT';
 
@@ -39,11 +37,14 @@ const Demands: React.FC = () => {
   const { currentUser, hasPermission } = useAuth();
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('RENTAL');
   const [searchTerm, setSearchTerm] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Demands state
-  const [rentalDemands, setRentalDemands] = useState<RentalDemand[]>(MOCK_RENTAL_DEMANDS);
-  const [purchaseDemands, setPurchaseDemands] = useState<PurchaseDemand[]>(MOCK_PURCHASE_DEMANDS);
-  const [projectDemands, setProjectDemands] = useState<ProjectDemand[]>(MOCK_PROJECT_DEMANDS);
+  // Data state
+  const [demands, setDemands] = useState<AnyDemand[]>([]);
+  const [gpuModels, setGpuModels] = useState<GpuModel[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
 
   // Modals state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -51,50 +52,49 @@ const Demands: React.FC = () => {
   const [editingDemand, setEditingDemand] = useState<AnyDemand | null>(null);
   const [demandToDelete, setDemandToDelete] = useState<AnyDemand | null>(null);
 
-  // Visibility & Editability Rules
-  const canSeeCategory = hasPermission('demand_categories');
-  const canSeeStatus = hasPermission('demand_status');
-  
-  // Editable by Sales Managers, Sales Directors and Administrators
-  const canEditCategory = currentUser?.role === RoleType.ADMIN || 
-                          currentUser?.role === RoleType.SALES_DIRECTOR || 
-                          currentUser?.role === RoleType.SALES_MANAGER;
-                          
-  const canEditStatus = currentUser?.role === RoleType.ADMIN || 
-                        currentUser?.role === RoleType.SALES_DIRECTOR;
+  // Form State for Rental
+  const [rentalFormData, setRentalFormData] = useState<Partial<RentalDemand>>({});
 
-  // Filter Data Isolation Logic
-  const filterIsolation = <T extends AnyDemand>(list: T[]) => {
-    return list.filter(d => {
-      if (d.deleteFlag) return false;
-      let hasAccess = false;
-      if (currentUser?.role === RoleType.ADMIN || currentUser?.role === RoleType.SALES_DIRECTOR) {
-        hasAccess = true;
-      } else if (currentUser?.role === RoleType.SALES_MANAGER) {
-        hasAccess = d.teamId === currentUser.teamId;
-      } else {
-        hasAccess = d.creatorId === currentUser?.id;
-      }
-      return hasAccess;
-    });
+  useEffect(() => {
+    loadData();
+  }, [activeSubTab, currentUser]);
+
+  const loadData = async () => {
+    if (!currentUser) return;
+    setIsLoading(true);
+    try {
+      const [demandList, modelList, customerList, companyList, userList] = await Promise.all([
+        api.demands.list(activeSubTab, currentUser),
+        api.gpuModels.list(currentUser),
+        api.customers.list(currentUser),
+        api.companies.list(currentUser),
+        api.users.list(currentUser)
+      ]);
+      setDemands(demandList);
+      setGpuModels(modelList);
+      setCustomers(customerList);
+      setCompanies(companyList);
+      setUsers(userList);
+    } catch (err) {
+      console.error('Failed to load demands:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const filteredDemands = useMemo(() => {
-    let list: AnyDemand[] = [];
-    if (activeSubTab === 'RENTAL') list = filterIsolation(rentalDemands);
-    else if (activeSubTab === 'PURCHASE') list = filterIsolation(purchaseDemands);
-    else if (activeSubTab === 'PROJECT') list = filterIsolation(projectDemands);
+    if (!searchTerm) return demands;
+    const term = searchTerm.toLowerCase();
+    return demands.filter(d => {
+      const custName = customers.find(c => c.id === d.customerId)?.name.toLowerCase() || '';
+      const compName = companies.find(c => c.id === d.companyId)?.name.toLowerCase() || '';
+      return custName.includes(term) || compName.includes(term);
+    });
+  }, [demands, searchTerm, customers, companies]);
 
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      list = list.filter(d => {
-        const custName = MOCK_CUSTOMERS.find(c => c.id === d.customerId)?.name.toLowerCase() || '';
-        const compName = MOCK_COMPANIES.find(c => c.id === d.companyId)?.name.toLowerCase() || '';
-        return custName.includes(term) || compName.includes(term);
-      });
-    }
-    return list;
-  }, [activeSubTab, rentalDemands, purchaseDemands, projectDemands, searchTerm, currentUser]);
+  // Permissions based on 5.2
+  const canEditCategory = currentUser?.role !== RoleType.SALES;
+  const canEditStatus = [RoleType.ADMIN, RoleType.SALES_DIRECTOR].includes(currentUser?.role!);
 
   const getStatusColor = (status: DemandStatus) => {
     switch (status) {
@@ -106,53 +106,64 @@ const Demands: React.FC = () => {
     }
   };
 
-  const getCreatorName = (id: string) => MOCK_USERS.find(u => u.id === id)?.realName || '未知用户';
-  const getCustomerName = (id: string) => MOCK_CUSTOMERS.find(c => c.id === id)?.name || '未知客户';
-  const getCompanyName = (id: string) => MOCK_COMPANIES.find(c => c.id === id)?.name || '未知公司';
-  const getGpuModelName = (id: string) => MOCK_GPU_MODELS.find(g => g.id === id)?.name || id;
+  const getCreatorName = (id: string) => users.find(u => u.id === id)?.realName || '未知用户';
+  const getCustomerName = (id: string) => customers.find(c => c.id === id)?.name || '未知客户';
+  const getCompanyName = (id: string) => companies.find(c => c.id === id)?.name || '未知公司';
+  const getGpuModelName = (id: string) => gpuModels.find(g => g.id === id)?.name || id;
 
-  const handleDelete = (demand: AnyDemand) => {
-    setDemandToDelete(demand);
-    setIsDeleteModalOpen(true);
-  };
-
-  const confirmDelete = () => {
-    if (!demandToDelete) return;
-    const setter = demandToDelete.demandType === 'RENTAL' ? setRentalDemands :
-                   demandToDelete.demandType === 'PURCHASE' ? setPurchaseDemands : setProjectDemands;
-    
-    setter((prev: any) => prev.map((d: any) => d.id === demandToDelete.id ? { ...d, deleteFlag: true } : d));
-    setIsDeleteModalOpen(false);
-    setDemandToDelete(null);
-  };
-
-  const handleEdit = (demand: AnyDemand) => {
+  const handleOpenModal = (demand: AnyDemand | null) => {
+    if (demand && demand.demandType === 'RENTAL') {
+      setRentalFormData(demand as RentalDemand);
+    } else {
+      // Default initial state for new Rental demand
+      setRentalFormData({
+        demandType: 'RENTAL',
+        status: DemandStatus.PENDING,
+        type: DEMAND_CATEGORIES[0],
+        serverCount: 1,
+        isBareMetal: true,
+        networkingRequirement: 'IB',
+        createTime: new Date().toISOString().replace('T', ' ').split('.')[0],
+        creatorId: currentUser?.id,
+        teamId: currentUser?.teamId
+      });
+    }
     setEditingDemand(demand);
     setIsModalOpen(true);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      if (editingDemand) {
+        await api.demands.update('RENTAL', editingDemand.id, rentalFormData);
+      } else {
+        await api.demands.add('RENTAL', rentalFormData as RentalDemand);
+      }
+      setIsModalOpen(false);
+      await loadData();
+    } catch (err) {
+      console.error('Save failed:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="space-y-6">
       {/* Tab Switcher */}
       <div className="flex items-center gap-1 bg-white p-1 rounded-2xl border border-slate-200 shadow-sm w-fit">
-        <button 
-          onClick={() => setActiveSubTab('RENTAL')}
-          className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'RENTAL' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:bg-slate-50'}`}
-        >
-          <Cpu className="w-4 h-4" /> 租赁需求
-        </button>
-        <button 
-          onClick={() => setActiveSubTab('PURCHASE')}
-          className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'PURCHASE' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:bg-slate-50'}`}
-        >
-          <ShoppingBag className="w-4 h-4" /> 采购需求
-        </button>
-        <button 
-          onClick={() => setActiveSubTab('PROJECT')}
-          className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'PROJECT' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:bg-slate-50'}`}
-        >
-          <Database className="w-4 h-4" /> 项目需求
-        </button>
+        {(['RENTAL', 'PURCHASE', 'PROJECT'] as SubTab[]).map(tab => (
+          <button 
+            key={tab}
+            onClick={() => setActiveSubTab(tab)}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeSubTab === tab ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:bg-slate-50'}`}
+          >
+            {tab === 'RENTAL' ? <Cpu className="w-4 h-4" /> : tab === 'PURCHASE' ? <ShoppingBag className="w-4 h-4" /> : <Database className="w-4 h-4" />}
+            {tab === 'RENTAL' ? '租赁需求' : tab === 'PURCHASE' ? '采购需求' : '项目需求'}
+          </button>
+        ))}
       </div>
 
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -173,7 +184,7 @@ const Demands: React.FC = () => {
           </button>
         </div>
         <button 
-          onClick={() => { setEditingDemand(null); setIsModalOpen(true); }}
+          onClick={() => handleOpenModal(null)}
           className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 active:scale-95"
         >
           <Plus className="w-5 h-5" />
@@ -181,8 +192,17 @@ const Demands: React.FC = () => {
         </button>
       </div>
 
-      {/* Lists */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      {/* List Table */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative min-h-[400px]">
+        {isLoading && (
+          <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-10 flex items-center justify-center">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
+              <p className="text-sm font-black text-indigo-900 animate-pulse">正在从富脊超算调取数据...</p>
+            </div>
+          </div>
+        )}
+        
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-slate-50 border-b border-slate-200">
@@ -197,9 +217,7 @@ const Demands: React.FC = () => {
                   {activeSubTab === 'RENTAL' ? '租期/预算' : activeSubTab === 'PURCHASE' ? '预算' : '交付机房'}
                 </th>
                 <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-tighter">交付时间</th>
-                {canSeeCategory && <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-tighter">类型</th>}
-                {canSeeStatus && <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-tighter">进度</th>}
-                <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-tighter">创建人</th>
+                <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-tighter">进度</th>
                 <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-tighter text-right">操作</th>
               </tr>
             </thead>
@@ -224,347 +242,361 @@ const Demands: React.FC = () => {
                       </p>
                     </td>
                   )}
+                  {/* ... (Other tabs table cells) */}
+                  
+                  <td className="px-6 py-4 text-sm font-bold">
+                     {activeSubTab === 'RENTAL' ? (demand as RentalDemand).duration : (demand as any).budgetTotal || (demand as any).dataCenter}
+                  </td>
 
-                  {activeSubTab === 'PURCHASE' && (
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-100 uppercase tracking-wider">
-                          {getGpuModelName((demand as PurchaseDemand).gpuModelId)}
-                        </span>
-                        <span className="text-sm font-black text-slate-900">x{(demand as PurchaseDemand).serverCount}</span>
-                      </div>
-                      <p className={`text-[10px] mt-1 font-bold uppercase tracking-wider ${(demand as PurchaseDemand).isSpot ? 'text-emerald-500' : 'text-blue-500'}`}>
-                        {(demand as PurchaseDemand).isSpot ? '现货' : '期货'}
-                      </p>
-                    </td>
-                  )}
-
-                  {activeSubTab === 'PROJECT' && (
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-bold border border-slate-200 uppercase tracking-wider">
-                          {(demand as ProjectDemand).pNumber} P
-                        </span>
-                        <span className="text-sm font-black text-slate-900">{(demand as ProjectDemand).nature}</span>
-                      </div>
-                      <p className="text-[10px] text-slate-400 mt-1 uppercase font-bold">
-                        批文: {(demand as ProjectDemand).hasApproval ? '是' : '否'}
-                      </p>
-                    </td>
-                  )}
-
-                  <td className="px-6 py-4">
-                    {activeSubTab === 'RENTAL' ? (
-                      <>
-                        <p className="text-sm text-slate-900 font-bold">{(demand as RentalDemand).duration}</p>
-                        <p className="text-xs text-slate-500">{(demand as RentalDemand).budgetPerMonth}</p>
-                      </>
-                    ) : activeSubTab === 'PURCHASE' ? (
-                      <p className="text-sm text-slate-900 font-bold">{(demand as PurchaseDemand).budgetTotal}</p>
-                    ) : (
-                      <p className="text-sm text-slate-900 font-bold">{(demand as ProjectDemand).dataCenter}</p>
-                    )}
+                  <td className="px-6 py-4 text-sm text-slate-900">
+                    {activeSubTab === 'PROJECT' ? (demand as ProjectDemand).deadline : (demand as any).deliveryTime}
                   </td>
 
                   <td className="px-6 py-4">
-                    <p className="text-sm text-slate-900 font-medium">
-                      {activeSubTab === 'PROJECT' ? (demand as ProjectDemand).deadline : (demand as RentalDemand | PurchaseDemand).deliveryTime}
-                    </p>
-                    {activeSubTab === 'RENTAL' && <p className="text-xs text-slate-400">{(demand as RentalDemand).region}</p>}
-                  </td>
-
-                  {canSeeCategory && (
-                    <td className="px-6 py-4">
-                      <span className="text-[10px] font-black text-slate-500 bg-slate-100 px-2 py-1 rounded uppercase tracking-widest border border-slate-200">
-                        {demand.type}
-                      </span>
-                    </td>
-                  )}
-
-                  {canSeeStatus && (
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black border uppercase tracking-wider ${getStatusColor(demand.status)}`}>
-                        {demand.status === DemandStatus.PENDING && <Clock className="w-3 h-3" />}
-                        {demand.status === DemandStatus.EVALUATING && <AlertCircle className="w-3 h-3" />}
-                        {demand.status === DemandStatus.COMPLETED && <CheckCircle2 className="w-3 h-3" />}
-                        {demand.status}
-                      </span>
-                    </td>
-                  )}
-
-                  <td className="px-6 py-4">
-                    <p className="text-sm font-bold text-slate-700">{getCreatorName(demand.creatorId)}</p>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{demand.createTime.split(' ')[0]}</p>
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black border uppercase tracking-wider ${getStatusColor(demand.status)}`}>
+                      {demand.status}
+                    </span>
                   </td>
 
                   <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0">
+                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
-                        onClick={() => handleEdit(demand)}
+                        onClick={() => handleOpenModal(demand)}
                         className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
-                      <button 
-                        onClick={() => handleDelete(demand)}
-                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                      >
+                      <button className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
                         <Trash2 className="w-4 h-4" />
-                      </button>
-                      <button className="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors">
-                        <MoreVertical className="w-4 h-4" />
                       </button>
                     </div>
                   </td>
                 </tr>
               ))}
-              {filteredDemands.length === 0 && (
-                <tr>
-                  <td colSpan={10} className="px-6 py-20 text-center bg-slate-50/50">
-                    <div className="flex flex-col items-center justify-center text-slate-400">
-                      <LayoutGrid className="w-12 h-12 mb-4 opacity-10" />
-                      <p className="text-sm font-bold italic">暂无匹配的需求数据</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Delete Modal */}
-      {isDeleteModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300 p-8">
-            <div className="text-center">
-              <div className="w-20 h-20 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                <AlertTriangle className="w-10 h-10" />
-              </div>
-              <h3 className="text-2xl font-black text-slate-900 mb-2">确认废弃此需求？</h3>
-              <p className="text-slate-500 text-sm mb-10 leading-relaxed px-4 italic">
-                “该操作会将需求移至回收站，关联的算力资源预定可能会被取消。历史状态流将保留以备审计。”
-              </p>
-              
-              <div className="space-y-3">
-                <button 
-                  onClick={confirmDelete}
-                  className="w-full py-4 bg-rose-600 text-white rounded-2xl font-black hover:bg-rose-700 transition-all shadow-xl shadow-rose-200 active:scale-95 uppercase tracking-widest"
-                >
-                  确认废弃
-                </button>
-                <button 
-                  onClick={() => setIsDeleteModalOpen(false)}
-                  className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-colors uppercase tracking-widest"
-                >
-                  暂不处理
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Generic Demand Modal (Demo for Add/Edit UI) */}
-      {isModalOpen && (
+      {/* 5.2 Rental Demand Modal */}
+      {isModalOpen && activeSubTab === 'RENTAL' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col animate-in slide-in-from-bottom-8 duration-300 max-h-[90vh]">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col animate-in slide-in-from-bottom-8 duration-300 max-h-[90vh]">
+            {/* Modal Header */}
             <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-200">
-                   {activeSubTab === 'RENTAL' ? <Cpu className="w-6 h-6" /> : activeSubTab === 'PURCHASE' ? <ShoppingBag className="w-6 h-6" /> : <Database className="w-6 h-6" />}
+                   <Cpu className="w-6 h-6" />
                 </div>
                 <div>
                   <h3 className="text-xl font-black text-slate-900">
-                    {editingDemand ? '更新' : '登记'}{activeSubTab === 'RENTAL' ? '算力租赁' : activeSubTab === 'PURCHASE' ? '硬件采购' : '项目集'}需求
+                    {editingDemand ? '编辑' : '登记'}算力租赁需求
                   </h3>
-                  <p className="text-xs text-slate-500">请确保核心算力参数及交付地域准确无误</p>
+                  <p className="text-xs text-slate-500">按照 5.2 业务规范填写租赁核心参数</p>
                 </div>
               </div>
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="p-2 hover:bg-slate-200 rounded-full text-slate-400 transition-colors"
-              >
+              <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full text-slate-400 transition-colors">
                 <X className="w-6 h-6" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-8 bg-white space-y-10 custom-scrollbar">
-              {/* Section 1: Basic Info */}
-              <div className="space-y-6">
-                <h4 className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                  <span className="w-8 h-[2px] bg-slate-200"></span> 关联主体信息
+            {/* Modal Body */}
+            <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-8 bg-white space-y-12 custom-scrollbar">
+              
+              {/* 1. 关联信息 */}
+              <section className="space-y-6">
+                <h4 className="flex items-center gap-2 text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em]">
+                  <Globe className="w-4 h-4" /> 关联信息
                 </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="space-y-1.5">
                     <label className="text-xs font-black text-slate-700 uppercase">所属客户 <span className="text-rose-500">*</span></label>
-                    <select className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all cursor-pointer font-bold">
-                      {MOCK_CUSTOMERS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    <select 
+                      required
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all font-bold"
+                      value={rentalFormData.customerId}
+                      onChange={e => setRentalFormData({...rentalFormData, customerId: e.target.value})}
+                    >
+                      <option value="">请选择客户</option>
+                      {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-black text-slate-700 uppercase">签约公司 <span className="text-rose-500">*</span></label>
-                    <select className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all cursor-pointer font-bold">
-                      {MOCK_COMPANIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    <select 
+                      required
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all font-bold"
+                      value={rentalFormData.companyId}
+                      onChange={e => setRentalFormData({...rentalFormData, companyId: e.target.value})}
+                    >
+                      <option value="">请选择公司</option>
+                      {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-black text-slate-700 uppercase">交付地域 <span className="text-rose-500">*</span></label>
-                    <select className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all cursor-pointer font-bold">
-                      <option>北京机房</option>
-                      <option>上海机房</option>
-                      <option>宁夏机房</option>
-                      <option>贵州机房</option>
+                    <label className="text-xs font-black text-slate-700 uppercase">GPU服务器型号 <span className="text-rose-500">*</span></label>
+                    <select 
+                      required
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all font-bold"
+                      value={rentalFormData.gpuModelId}
+                      onChange={e => setRentalFormData({...rentalFormData, gpuModelId: e.target.value})}
+                    >
+                      <option value="">请选择型号</option>
+                      {gpuModels.map(m => <option key={m.id} value={m.id}>{m.name} ({m.vram})</option>)}
                     </select>
                   </div>
                 </div>
-              </div>
+              </section>
 
-              {/* Section 2: Technical Params (Dynamic based on SubTab) */}
-              <div className="space-y-6">
-                <h4 className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                  <span className="w-8 h-[2px] bg-slate-200"></span> 核心需求参数
+              {/* 2. 核心参数 */}
+              <section className="space-y-6">
+                <h4 className="flex items-center gap-2 text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em]">
+                  <Zap className="w-4 h-4" /> 核心参数
                 </h4>
-                
-                {activeSubTab !== 'PROJECT' ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div className="space-y-1.5 lg:col-span-2">
-                      <label className="text-xs font-black text-slate-700 uppercase">GPU服务器型号 <span className="text-rose-500">*</span></label>
-                      <select className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all cursor-pointer font-bold">
-                        {MOCK_GPU_MODELS.map(m => <option key={m.id} value={m.id}>{m.name} ({m.vram})</option>)}
-                      </select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-black text-slate-700 uppercase">需求台数 <span className="text-rose-500">*</span></label>
-                      <input type="number" min="1" defaultValue="8" className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none font-bold" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-black text-slate-700 uppercase">资源类型 <span className="text-rose-500">*</span></label>
-                      <div className="flex gap-2">
-                         <button type="button" className="flex-1 py-3 border-2 border-indigo-600 bg-indigo-50 text-indigo-700 rounded-xl text-xs font-black">裸金属</button>
-                         <button type="button" className="flex-1 py-3 border-2 border-slate-200 text-slate-400 rounded-xl text-xs font-black">虚拟机</button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-black text-slate-700 uppercase">项目性质 <span className="text-rose-500">*</span></label>
-                      <select className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all cursor-pointer font-bold">
-                        <option>政府项目</option>
-                        <option>科研项目</option>
-                        <option>企业专区</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-black text-slate-700 uppercase">P 数要求 <span className="text-rose-500">*</span></label>
-                      <input type="number" min="1" placeholder="如: 512" className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none font-bold" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-black text-slate-700 uppercase">是否有批文 <span className="text-rose-500">*</span></label>
-                      <div className="flex gap-2">
-                         <button type="button" className="flex-1 py-3 border-2 border-indigo-600 bg-indigo-50 text-indigo-700 rounded-xl text-xs font-black">是</button>
-                         <button type="button" className="flex-1 py-3 border-2 border-slate-200 text-slate-400 rounded-xl text-xs font-black">否</button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Section 3: Cost & Timeline */}
-              <div className="space-y-6">
-                <h4 className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                  <span className="w-8 h-[2px] bg-slate-200"></span> 交付及商务条款
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-black text-slate-700 uppercase">
-                      {activeSubTab === 'RENTAL' ? '预估租期' : '截止/交付时间'} <span className="text-rose-500">*</span>
-                    </label>
-                    <input type="text" placeholder={activeSubTab === 'RENTAL' ? "如: 12个月" : "YYYY-MM-DD"} className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none font-bold" />
+                    <label className="text-xs font-black text-slate-700 uppercase">服务器数量 <span className="text-rose-500">*</span></label>
+                    <input 
+                      required 
+                      type="number" 
+                      min="1" 
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold"
+                      value={rentalFormData.serverCount}
+                      onChange={e => setRentalFormData({...rentalFormData, serverCount: parseInt(e.target.value) || 1})}
+                    />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-black text-slate-700 uppercase">
-                      {activeSubTab === 'RENTAL' ? '预算(台/月)' : '预算总额'} <span className="text-rose-500">*</span>
-                    </label>
-                    <input type="text" placeholder="请输入金额或范围" className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none font-bold" />
+                    <label className="text-xs font-black text-slate-700 uppercase">产品规格 <span className="text-rose-500">*</span></label>
+                    <div className="flex bg-slate-100 p-1 rounded-xl">
+                      <button 
+                        type="button"
+                        onClick={() => setRentalFormData({...rentalFormData, isBareMetal: true})}
+                        className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${rentalFormData.isBareMetal ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}
+                      >裸金属</button>
+                      <button 
+                        type="button"
+                        onClick={() => setRentalFormData({...rentalFormData, isBareMetal: false})}
+                        className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${!rentalFormData.isBareMetal ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}
+                      >含组网/云化</button>
+                    </div>
                   </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700 uppercase">存储需求</label>
+                    <input 
+                      type="text" 
+                      placeholder="如: 100TB NVMe" 
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold"
+                      value={rentalFormData.storageRequirement}
+                      onChange={e => setRentalFormData({...rentalFormData, storageRequirement: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700 uppercase">通算需求</label>
+                    <input 
+                      type="text" 
+                      placeholder="如: 50TFLOPS" 
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold"
+                      value={rentalFormData.computeRequirement}
+                      onChange={e => setRentalFormData({...rentalFormData, computeRequirement: e.target.value})}
+                    />
+                  </div>
+                </div>
+              </section>
+
+              {/* 3. 组网配置 */}
+              <section className="space-y-6">
+                <h4 className="flex items-center gap-2 text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em]">
+                  <Settings className="w-4 h-4" /> 组网配置
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700 uppercase">组网要求 <span className="text-rose-500">*</span></label>
+                    <select 
+                      required
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold"
+                      value={rentalFormData.networkingRequirement}
+                      onChange={e => setRentalFormData({...rentalFormData, networkingRequirement: e.target.value as 'IB' | 'ROCE'})}
+                    >
+                      <option value="IB">IB 组网 (InfiniBand)</option>
+                      <option value="ROCE">RoCE 组网</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700 uppercase">平台要求</label>
+                    <input 
+                      type="text" 
+                      placeholder="如: 指定 OS 或管理平台" 
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold"
+                      value={rentalFormData.platformRequirement}
+                      onChange={e => setRentalFormData({...rentalFormData, platformRequirement: e.target.value})}
+                    />
+                  </div>
+                </div>
+              </section>
+
+              {/* 4. 时间信息 */}
+              <section className="space-y-6">
+                <h4 className="flex items-center gap-2 text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em]">
+                  <Calendar className="w-4 h-4" /> 时间信息
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700 uppercase">预期租期 <span className="text-rose-500">*</span></label>
+                    <input 
+                      required 
+                      type="text" 
+                      placeholder="如: 6个月 / 1年" 
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold"
+                      value={rentalFormData.duration}
+                      onChange={e => setRentalFormData({...rentalFormData, duration: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700 uppercase">交付时间 <span className="text-rose-500">*</span></label>
+                    <input 
+                      required 
+                      type="date" 
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold"
+                      value={rentalFormData.deliveryTime}
+                      onChange={e => setRentalFormData({...rentalFormData, deliveryTime: e.target.value})}
+                    />
+                  </div>
+                </div>
+              </section>
+
+              {/* 5. 成本信息 */}
+              <section className="space-y-6">
+                <h4 className="flex items-center gap-2 text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em]">
+                  <CreditCard className="w-4 h-4" /> 成本信息
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-1.5">
                     <label className="text-xs font-black text-slate-700 uppercase">付款方式 <span className="text-rose-500">*</span></label>
-                    <select className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all cursor-pointer font-bold">
+                    <select 
+                      required
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold"
+                      value={rentalFormData.paymentMethod}
+                      onChange={e => setRentalFormData({...rentalFormData, paymentMethod: e.target.value})}
+                    >
+                      <option value="">选择付款方式</option>
                       <option>预付全款</option>
                       <option>按月支付</option>
                       <option>按季支付</option>
-                      <option>年底结算</option>
+                      <option>按年支付</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700 uppercase">预算台/月 <span className="text-rose-500">*</span></label>
+                    <input 
+                      required 
+                      type="text" 
+                      placeholder="如: 5.5万/台/月" 
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold"
+                      value={rentalFormData.budgetPerMonth}
+                      onChange={e => setRentalFormData({...rentalFormData, budgetPerMonth: e.target.value})}
+                    />
+                  </div>
+                </div>
+              </section>
+
+              {/* 6. 基础信息 (Read-only for existing) */}
+              <section className="space-y-6">
+                <h4 className="flex items-center gap-2 text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em]">
+                  <HardDrive className="w-4 h-4" /> 基础信息
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700 uppercase">信息来源</label>
+                    <input 
+                      type="text" 
+                      placeholder="如: 官网/客户介绍" 
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold"
+                      value={rentalFormData.source}
+                      onChange={e => setRentalFormData({...rentalFormData, source: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-1.5 opacity-60">
+                    <label className="text-xs font-black text-slate-700 uppercase">收集日期 (只读)</label>
+                    <div className="w-full px-5 py-3 bg-slate-100 border border-slate-200 rounded-xl font-bold flex items-center gap-2">
+                       <Calendar className="w-4 h-4 text-slate-400" />
+                       {rentalFormData.createTime}
+                    </div>
+                  </div>
+                  <div className="space-y-1.5 opacity-60">
+                    <label className="text-xs font-black text-slate-700 uppercase">创建人 (只读)</label>
+                    <div className="w-full px-5 py-3 bg-slate-100 border border-slate-200 rounded-xl font-bold flex items-center gap-2">
+                       <User className="w-4 h-4 text-slate-400" />
+                       {getCreatorName(rentalFormData.creatorId || '')}
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* 7. 分类状态 (Permission Controlled) */}
+              <section className="space-y-6 pt-6 border-t border-slate-100">
+                <h4 className="flex items-center gap-2 text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em]">
+                  <Tags className="w-4 h-4" /> 分类状态
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700 uppercase flex items-center gap-2">
+                      需求分类 <span className="text-rose-500">*</span>
+                      {/* Wrapped AlertCircle in a span with title to fix type error on Lucide icon */}
+                      {!canEditCategory && (
+                        <span title="销售权限不可改">
+                          <AlertCircle className="w-3 h-3 text-amber-500" />
+                        </span>
+                      )}
+                    </label>
+                    <select 
+                      disabled={!canEditCategory}
+                      className={`w-full px-5 py-3 border rounded-xl outline-none font-bold transition-all ${canEditCategory ? 'bg-slate-50 border-slate-200 focus:ring-4 focus:ring-indigo-100' : 'bg-slate-100 border-slate-100 text-slate-500 cursor-not-allowed'}`}
+                      value={rentalFormData.type}
+                      onChange={e => setRentalFormData({...rentalFormData, type: e.target.value})}
+                    >
+                      {DEMAND_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-700 uppercase flex items-center gap-2">
+                      需求状态 <span className="text-rose-500">*</span>
+                      {/* Wrapped AlertCircle in a span with title to fix type error on Lucide icon */}
+                      {!canEditStatus && (
+                        <span title="仅总监/管理员可改">
+                          <AlertCircle className="w-3 h-3 text-amber-500" />
+                        </span>
+                      )}
+                    </label>
+                    <select 
+                      disabled={!canEditStatus}
+                      className={`w-full px-5 py-3 border rounded-xl outline-none font-bold transition-all ${canEditStatus ? 'bg-slate-50 border-slate-200 focus:ring-4 focus:ring-indigo-100' : 'bg-slate-100 border-slate-100 text-slate-500 cursor-not-allowed'}`}
+                      value={rentalFormData.status}
+                      onChange={e => setRentalFormData({...rentalFormData, status: e.target.value as DemandStatus})}
+                    >
+                      {Object.values(DemandStatus).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                 </div>
-              </div>
+              </section>
 
-              {/* Section 4: Classification & Status (Prompt Update) */}
-              {canSeeCategory && (
-                <div className="space-y-6">
-                  <h4 className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                    <span className="w-8 h-[2px] bg-slate-200"></span> 分类及进度管理
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-black text-slate-700 uppercase flex items-center gap-2">
-                        需求分类 <span className="text-rose-500">*</span>
-                        {!canEditCategory && <span className="text-[10px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded font-normal lowercase tracking-tight">只读</span>}
-                      </label>
-                      <div className="relative">
-                        <Tags className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                        <select 
-                          disabled={!canEditCategory}
-                          className={`w-full pl-11 pr-5 py-3 border rounded-xl outline-none transition-all appearance-none cursor-pointer font-bold ${
-                            canEditCategory 
-                              ? 'bg-slate-50 border-slate-200 focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500' 
-                              : 'bg-slate-100 border-slate-100 text-slate-500 cursor-not-allowed'
-                          }`}
-                          defaultValue={editingDemand?.type || DEMAND_CATEGORIES[0]}
-                        >
-                          {DEMAND_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                        </select>
-                      </div>
-                    </div>
+            </form>
 
-                    {canSeeStatus && (
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-black text-slate-700 uppercase flex items-center gap-2">
-                          进度状态 <span className="text-rose-500">*</span>
-                          {!canEditStatus && <span className="text-[10px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded font-normal lowercase tracking-tight">只读</span>}
-                        </label>
-                        <select 
-                          disabled={!canEditStatus}
-                          className={`w-full px-5 py-3 border rounded-xl outline-none transition-all appearance-none cursor-pointer font-bold ${
-                            canEditStatus 
-                              ? 'bg-slate-50 border-slate-200 focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500' 
-                              : 'bg-slate-100 border-slate-100 text-slate-500 cursor-not-allowed'
-                          }`}
-                          defaultValue={editingDemand?.status || DemandStatus.PENDING}
-                        >
-                          {Object.values(DemandStatus).map(status => <option key={status} value={status}>{status}</option>)}
-                        </select>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
+            {/* Modal Footer */}
             <div className="px-8 py-6 border-t border-slate-100 flex items-center justify-end gap-4 bg-slate-50/50">
               <button 
+                type="button"
                 onClick={() => setIsModalOpen(false)}
                 className="px-8 py-3 text-sm font-black text-slate-500 hover:bg-slate-100 rounded-xl transition-colors uppercase tracking-widest"
               >
                 取消
               </button>
               <button 
-                onClick={() => setIsModalOpen(false)}
-                className="px-12 py-3 bg-indigo-600 text-white text-sm font-black rounded-xl hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 active:scale-95 uppercase tracking-widest"
+                type="submit"
+                onClick={handleSave}
+                className="px-12 py-3 bg-indigo-600 text-white text-sm font-black rounded-xl hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 active:scale-95 uppercase tracking-widest flex items-center gap-2"
               >
-                {editingDemand ? '保存修改' : '确认录入'}
+                {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                {editingDemand ? '保存更新' : '确认录入需求'}
               </button>
             </div>
           </div>

@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Plus, 
@@ -63,12 +62,13 @@ const Demands: React.FC = () => {
     if (!currentUser) return;
     setIsLoading(true);
     try {
+      // Fix: Removed currentUser from api calls to match method signatures in api.ts
       const [demandList, modelList, customerList, companyList, userList] = await Promise.all([
-        api.demands.list(activeSubTab, currentUser),
-        api.gpuModels.list(currentUser),
-        api.customers.list(currentUser),
-        api.companies.list(currentUser),
-        api.users.list(currentUser)
+        api.demands.list(activeSubTab),
+        api.gpuModels.list(),
+        api.customers.list(),
+        api.companies.list(),
+        api.users.list()
       ]);
       setDemands(demandList);
       setGpuModels(modelList);

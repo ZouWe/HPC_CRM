@@ -1,10 +1,9 @@
 
-import React, { useState, useMemo, createContext, useContext } from 'react';
+import React, { useState, useMemo, createContext, useContext, useEffect } from 'react';
 import { 
   Users, 
   LayoutDashboard, 
   LogOut, 
-  ChevronRight,
   ShieldCheck,
   Building2,
   Users2,
@@ -45,35 +44,54 @@ export const useAuth = () => {
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null); 
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  // 检查已存在的 Session
+  useEffect(() => {
+    const savedUser = localStorage.getItem('fuji_user');
+    const token = localStorage.getItem('fuji_auth_token');
+    if (savedUser && token) {
+      try {
+        setCurrentUser(JSON.parse(savedUser));
+      } catch (e) {
+        localStorage.clear();
+      }
+    }
+    setIsInitializing(false);
+  }, []);
 
   const login = async (username: string, password?: string): Promise<boolean> => {
-    const user = await api.auth.login(username, password);
-    if (user) {
-      setCurrentUser(user);
-      return true;
+    try {
+      const user = await api.auth.login(username, password);
+      if (user) {
+        setCurrentUser(user);
+        localStorage.setItem('fuji_user', JSON.stringify(user));
+        return true;
+      }
+    } catch (err) {
+      console.error('Login Error:', err);
     }
     return false;
   };
 
-  const logout = () => setCurrentUser(null);
+  const logout = () => {
+    api.auth.logout();
+    localStorage.removeItem('fuji_user');
+    setCurrentUser(null);
+  };
 
   const hasPermission = (module: string): boolean => {
     if (!currentUser) return false;
-    // Handled separately because ADMIN has all permissions
     if (currentUser.role === RoleType.ADMIN) return true;
 
     const role = currentUser.role;
-    // Since we returned true if role is ADMIN above, role is now strictly non-ADMIN roles here
     switch (module) {
-      // Fix: Removed redundant RoleType.ADMIN comparisons to resolve "no overlap" type errors
       case 'employees': return false;
       case 'roles': return false;
       case 'departments': return false;
       case 'logs': return role === RoleType.SALES_DIRECTOR;
       case 'gpu_models': return true; 
-      case 'payment_methods':
-      case 'demand_categories': return [RoleType.SALES_DIRECTOR, RoleType.SALES_MANAGER].includes(role as any);
-      case 'demand_status': return role === RoleType.SALES_DIRECTOR;
+      case 'logs': return role === RoleType.SALES_DIRECTOR;
       default: return true;
     }
   };
@@ -91,6 +109,14 @@ const App: React.FC = () => {
   ];
 
   const filteredMenuItems = menuItems.filter(item => hasPermission(item.permission));
+
+  if (isInitializing) {
+    return (
+      <div className="h-screen bg-slate-900 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return <Login onLogin={login} />;

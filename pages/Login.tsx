@@ -19,6 +19,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
     try {
       const success = await onLogin(username, password);
+      console.log('onlogin ');
       if (!success) {
         setError('用户名或密码错误，请重试。');
       }

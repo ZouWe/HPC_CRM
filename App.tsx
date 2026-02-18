@@ -62,7 +62,7 @@ const App: React.FC = () => {
 
   const login = async (username: string, password?: string): Promise<boolean> => {
     try {
-      const user = await api.auth.login(username, password);
+      const user = await api.auth.login(username, password); 
       if (user) {
         setCurrentUser(user);
         localStorage.setItem('fuji_user', JSON.stringify(user));

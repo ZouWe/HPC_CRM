@@ -21,18 +21,23 @@ import {
   BatteryCharging,
   DollarSign,
   Tag,
-  // Added Settings to the import list
-  Settings
+  Settings,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { GpuModel, RoleType } from '../types';
 import { useAuth } from '../App';
 import { api } from '../api';
+
+const PAGE_SIZE = 10;
 
 const GpuModels: React.FC = () => {
   const { currentUser } = useAuth();
   const [models, setModels] = useState<GpuModel[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [editingModel, setEditingModel] = useState<GpuModel | null>(null);
@@ -73,6 +78,10 @@ const GpuModels: React.FC = () => {
     loadData();
   }, []);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   const filteredModels = useMemo(() => {
     return models.filter(m => 
       !m.isDeleted && 
@@ -80,6 +89,9 @@ const GpuModels: React.FC = () => {
        m.cpu.toLowerCase().includes(searchTerm.toLowerCase()))
     );
   }, [models, searchTerm]);
+
+  const totalPages = Math.ceil(filteredModels.length / PAGE_SIZE);
+  const paginatedModels = filteredModels.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const handleEditClick = (model: GpuModel) => {
     setEditingModel(model);
@@ -106,7 +118,7 @@ const GpuModels: React.FC = () => {
     setIsLoading(true);
     try {
       if (editingModel) {
-        await api.gpuModels.update(String(editingModel.id), formData);
+        await api.gpuModels.update(editingModel.id, formData);
       } else {
         await api.gpuModels.add(formData);
       }
@@ -123,7 +135,7 @@ const GpuModels: React.FC = () => {
     if (modelToDelete) {
       setIsLoading(true);
       try {
-        await api.gpuModels.delete(String(modelToDelete.id));
+        await api.gpuModels.delete(modelToDelete.id);
         setIsDeleteModalOpen(false);
         setModelToDelete(null);
         await loadData();
@@ -158,98 +170,143 @@ const GpuModels: React.FC = () => {
         )}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 relative min-h-[300px]">
+      <div className="relative min-h-[400px] flex flex-col">
         {isLoading && (
           <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-10 flex items-center justify-center">
             <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
           </div>
         )}
         
-        {filteredModels.map((model) => (
-          <div key={model.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-400 transition-all group flex flex-col overflow-hidden">
-            <div className="p-6">
-              <div className="flex items-start justify-between mb-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-slate-900 text-white rounded-xl flex items-center justify-center shadow-lg">
-                    <Cpu className="w-6 h-6" />
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 flex-1">
+          {paginatedModels.map((model) => (
+            <div key={model.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-400 transition-all group flex flex-col overflow-hidden h-fit">
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-slate-900 text-white rounded-xl flex items-center justify-center shadow-lg">
+                      <Cpu className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black text-slate-900 leading-tight">{model.brand}</h3>
+                      <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mt-1">GPU Memory: {model.memory}GB HBM</p>
+                    </div>
+                  </div>
+                  {canEdit && (
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => handleEditClick(model)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"><Edit2 className="w-4 h-4" /></button>
+                      <button onClick={() => { setModelToDelete(model); setIsDeleteModalOpen(true); }} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase mb-1">
+                      <Microchip className="w-3 h-3" /> CPU
+                    </div>
+                    <p className="text-xs font-bold text-slate-700 truncate" title={model.cpu}>{model.cpu}</p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase mb-1">
+                      <Database className="w-3 h-3" /> RAM
+                    </div>
+                    <p className="text-xs font-bold text-slate-700">{model.ram}GB</p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase mb-1">
+                      <Network className="w-3 h-3" /> IB
+                    </div>
+                    <p className="text-xs font-bold text-slate-700 truncate" title={model.ibCard}>{model.ibCard}</p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase mb-1">
+                      <HardDrive className="w-3 h-3" /> 存储
+                    </div>
+                    <p className="text-xs font-bold text-slate-700 truncate" title={model.nvmeSsd}>{model.nvmeSsd}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase mb-1 flex items-center gap-1">
+                      <Clock className="w-3 h-3" /> 租赁 (月)
+                    </p>
+                    <p className="text-sm font-black text-indigo-600">
+                      ¥{model.rentalPriceMin.toLocaleString()} - ¥{model.rentalPriceMax.toLocaleString()}
+                    </p>
                   </div>
                   <div>
-                    <h3 className="text-xl font-black text-slate-900 leading-tight">{model.brand}</h3>
-                    <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mt-1">GPU Memory: {model.memory}GB HBM</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase mb-1 flex items-center gap-1">
+                      <CreditCard className="w-3 h-3" /> 售卖
+                    </p>
+                    <p className="text-sm font-black text-emerald-600">
+                      ¥{model.salePriceMin.toLocaleString()} - ¥{model.salePriceMax.toLocaleString()}
+                    </p>
                   </div>
-                </div>
-                {canEdit && (
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => handleEditClick(model)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"><Edit2 className="w-4 h-4" /></button>
-                    <button onClick={() => { setModelToDelete(model); setIsDeleteModalOpen(true); }} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase mb-1">
-                    <Microchip className="w-3 h-3" /> CPU
-                  </div>
-                  <p className="text-xs font-bold text-slate-700 truncate" title={model.cpu}>{model.cpu}</p>
-                </div>
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase mb-1">
-                    <Database className="w-3 h-3" /> 系统内存
-                  </div>
-                  <p className="text-xs font-bold text-slate-700">{model.ram}GB RAM</p>
-                </div>
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase mb-1">
-                    <Network className="w-3 h-3" /> IB 组网
-                  </div>
-                  <p className="text-xs font-bold text-slate-700 truncate" title={model.ibCard}>{model.ibCard}</p>
-                </div>
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase mb-1">
-                    <HardDrive className="w-3 h-3" /> 存储
-                  </div>
-                  <p className="text-xs font-bold text-slate-700 truncate" title={model.nvmeSsd}>{model.nvmeSsd}</p>
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
-                <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase mb-1 flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> 租赁参考 (月)
-                  </p>
-                  <p className="text-sm font-black text-indigo-600">
-                    ¥{model.rentalPriceMin.toLocaleString()} - ¥{model.rentalPriceMax.toLocaleString()}
-                  </p>
+              
+              <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between mt-auto">
+                <div className="flex items-center gap-3">
+                   <div className="flex items-center gap-1.5">
+                     <BatteryCharging className="w-3.5 h-3.5 text-slate-400" />
+                     <span className="text-[10px] font-bold text-slate-500 uppercase">{model.powerSupply}</span>
+                   </div>
+                   <div className="w-px h-3 bg-slate-200" />
+                   <span className="text-[10px] font-bold text-slate-500 uppercase">{model.networkAdapter}</span>
                 </div>
-                <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase mb-1 flex items-center gap-1">
-                    <CreditCard className="w-3 h-3" /> 售卖参考
-                  </p>
-                  <p className="text-sm font-black text-emerald-600">
-                    ¥{model.salePriceMin.toLocaleString()} - ¥{model.salePriceMax.toLocaleString()}
-                  </p>
-                </div>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-black border uppercase tracking-tighter ${
+                  model.status === 'AVAILABLE' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'
+                }`}>
+                  {model.status === 'AVAILABLE' ? '现货充沛' : '货源偏紧'}
+                </span>
               </div>
             </div>
-            
-            <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                 <div className="flex items-center gap-1.5">
-                   <BatteryCharging className="w-3.5 h-3.5 text-slate-400" />
-                   <span className="text-[10px] font-bold text-slate-500 uppercase">{model.powerSupply}</span>
-                 </div>
-                 <div className="w-px h-3 bg-slate-200" />
-                 <span className="text-[10px] font-bold text-slate-500 uppercase">{model.networkAdapter}</span>
-              </div>
-              <span className={`px-2 py-0.5 rounded text-[10px] font-black border uppercase tracking-tighter ${
-                model.status === 'AVAILABLE' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'
-              }`}>
-                {model.status === 'AVAILABLE' ? '现货充沛' : '货源偏紧'}
-              </span>
+          ))}
+          {filteredModels.length === 0 && !isLoading && (
+            <div className="col-span-full py-24 bg-white rounded-2xl border border-slate-200 text-center text-slate-400 italic">
+              暂无匹配的算力机型规格
+            </div>
+          )}
+        </div>
+
+        {/* 分页控制 UI */}
+        {totalPages > 1 && (
+          <div className="mt-8 px-6 py-4 bg-white rounded-2xl border border-slate-200 flex items-center justify-between shadow-sm">
+            <p className="text-xs font-bold text-slate-500">
+              显示第 <span className="text-indigo-600">{(currentPage - 1) * PAGE_SIZE + 1}</span> 至 <span className="text-indigo-600">{Math.min(currentPage * PAGE_SIZE, filteredModels.length)}</span> 条，共 <span className="text-indigo-600">{filteredModels.length}</span> 条
+            </p>
+            <div className="flex items-center gap-1">
+              <button 
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                className="p-2 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-200 disabled:opacity-30 transition-all"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              {Array.from({ length: totalPages }).map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCurrentPage(i + 1)}
+                  className={`w-8 h-8 rounded-lg text-xs font-black transition-all ${
+                    currentPage === i + 1 
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' 
+                      : 'text-slate-500 hover:bg-slate-50 border border-transparent hover:border-slate-200'
+                  }`}
+                >
+                  {i + 1}
+                </button>
+              ))}
+              <button 
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                className="p-2 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-200 disabled:opacity-30 transition-all"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
-        ))}
+        )}
       </div>
 
       {/* 增强型 GPU 编辑 Modal */}

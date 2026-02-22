@@ -7,23 +7,44 @@ export enum RoleType {
 }
 
 export interface User {
-  id: string;
+  id: number;
   username: string;
   password?: string;
   realName: string;
   phone: string;
   email?: string;
-  department: string;
+  department?: string; // 兼容旧代码，存储部门名称
+  departmentId?: number; // 新增：存储部门 ID
   status: 'ENABLE' | 'DISABLE';
   role: RoleType;
-  teamId?: string;
+  teamId?: number | string; // 存储团队 ID
   createTime: string;
   creator: string;
   deleteFlag: boolean;
 }
 
+export interface OperationLog {
+  id: number;
+  username: string;
+  realName: string;
+  module: string;
+  operationType: string;
+  operationDesc: string;
+  requestMethod: string;
+  requestUrl: string;
+  requestParams: string;
+  ipAddress: string;
+  userAgent: string;
+  isSuccess: boolean;
+  errorMessage?: string;
+  executionTime: number;
+  oldValue?: string;
+  newValue?: string;
+  createTime: string;
+}
+
 export interface Department {
-  id: string;
+  id: number;
   name: string;
   code: string;
   description?: string;
@@ -32,130 +53,120 @@ export interface Department {
 }
 
 export interface Team {
-  id: string;
+  id: number;
   name: string;
-  leaderId: string;
-  departmentId: string; // 关联的部门ID
+  leaderId: number;
+  departmentId: number; 
 }
 
 export interface Customer {
-  id: string;
-  name: string;
-  title?: string;
-  phone: string;
-  role: 'INTERMEDIARY' | 'DIRECT' | 'CHANNEL';
-  companyId?: string; // 关联的企业ID
-  creatorId: string;
-  teamId: string;
+  id: number;
+  name: string;           
+  companyName: string;    
+  contactPerson: string;  
+  contactPhone: string;   
+  email?: string;
+  demandPreference?: string; 
+  cooperationStage?: string; 
+  followUpStatus?: string;   
+  assigneeId: number;       
+  creatorId: number;
+  teamId: string; // 团队 ID 映射暂保留
   createTime: string;
   deleteFlag: boolean;
 }
 
 export interface Company {
-  id: string;
+  id: number;
   name: string;
   industry: string;
   years: number;
   capital: string;
   mainBusiness: string;
   screenshotUrl?: string;
-  creatorId: string;
+  creatorId: number;
   teamId: string;
   createTime: string;
   deleteFlag: boolean;
 }
 
-/**
- * 更新后的 GPU 配置模型，匹配后端 JSON
- */
 export interface GpuModel {
   id: number;
-  createdAt: string;
-  updatedAt: string;
-  isDeleted: boolean;
-  brand: string;           // 品牌型号，如 NVIDIA H100
-  memory: number;          // 显存，如 80 (GB)
-  cpu: string;             // 处理器信息
-  ram: number;             // 系统内存，如 512 (GB)
-  ibCard: string;          // IB网卡
-  nvmeSsd: string;         // 硬盘
-  networkAdapter: string;  // 网卡
-  powerSupply: string;     // 电源
+  brand: string;           
+  memory: number;          
+  cpu: string;             
+  ram: number;             
+  ibCard: string;          
+  nvmeSsd: string;         
+  networkAdapter: string;  
+  powerSupply: string;     
   rentalPriceMin: number;
   rentalPriceMax: number;
   salePriceMin: number;
   salePriceMax: number;
+  createdAt: string;
+  updatedAt: string;
+  isDeleted: boolean;
   createdBy: string | null;
-  // 保持 UI 逻辑兼容的可选字段
   status?: 'AVAILABLE' | 'SHORTAGE' | 'UNAVAILABLE';
 }
 
 export enum DemandStatus {
-  PENDING = 'PENDING',
-  EVALUATING = 'EVALUATING',
-  DEVELOPING = 'DEVELOPING',
-  COMPLETED = 'COMPLETED',
-  CANCELLED = 'CANCELLED'
+  PENDING_REVIEW = 'PENDING_REVIEW', 
+  REVIEWING = 'REVIEWING',           
+  APPROVED = 'APPROVED',             
+  IN_PROGRESS = 'IN_PROGRESS',       
+  COMPLETED = 'COMPLETED',           
+  CLOSED = 'CLOSED',                 
+  REJECTED = 'REJECTED'              
 }
 
 export interface BaseDemand {
-  id: string;
-  customerId: string;
-  companyId: string;
-  creatorId: string;
-  teamId: string;
+  id: number;
+  title: string;           
+  customerId: number;
   status: DemandStatus;
-  type: string;
+  category: string;        
+  priority: string;        
+  description?: string;
+  source?: string;         
+  budget?: string;         
+  cost?: string;           
+  creatorId: number;
+  teamId: string;
   createTime: string;
   deleteFlag: boolean;
 }
 
 export interface RentalDemand extends BaseDemand {
   demandType: 'RENTAL';
-  gpuModelId: string;
-  serverCount: number;
-  isBareMetal: boolean;
+  gpuModelId?: number;
+  serverCount?: number;
+  includeNetworking?: boolean;
   storageRequirement?: string;
-  computeRequirement?: string;
-  networkingRequirement: 'IB' | 'ROCE';
+  computingRequirement?: string;
+  networkingRequirement?: string;
   platformRequirement?: string;
-  duration: string;
-  deliveryTime: string;
-  paymentMethod: string;
-  budgetPerMonth: string;
-  cost?: string;
-  purchasingTime?: string;
-  source?: string;
-  region: string;
+  rentalPeriod?: string;   
+  deliveryDate?: string;   
+  paymentMethod?: string;
 }
 
 export interface PurchaseDemand extends BaseDemand {
   demandType: 'PURCHASE';
-  gpuModelId: string;
-  serverCount: number;
-  isSpot: boolean;
-  deliveryTime: string;
-  budgetTotal: string;
+  gpuModelId?: number;
+  serverCount?: number;
+  purchaseDate?: string;   
 }
 
 export interface ProjectDemand extends BaseDemand {
   demandType: 'PROJECT';
-  nature: string;
-  pNumber: number;
-  hasApproval: boolean;
-  deadline: string;
-  dataCenter: string;
+  projectName?: string;
+  projectScope?: string;
+  technicalRequirement?: string;
+  projectDuration?: string;
+  servicePrice?: string;   
+  serverCount?: number;    
 }
 
 export type AnyDemand = RentalDemand | PurchaseDemand | ProjectDemand;
-
-export interface OperationLog {
-  id: string;
-  time: string;
-  username: string;
-  realName: string;
-  module: string;
-  action: 'LOGIN' | 'LOGOUT' | 'ADD' | 'UPDATE' | 'DELETE';
-  content: string;
-  ip: string;
-}

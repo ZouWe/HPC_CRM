@@ -14,10 +14,13 @@ import {
   X,
   User,
   ShieldAlert,
-  AlertTriangle
+  AlertTriangle,
+  ChevronLeft
 } from 'lucide-react';
 import { Department, Team, User as UserType } from '../types';
 import { api } from '../api';
+
+const PAGE_SIZE = 10;
 
 const Departments: React.FC = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -25,7 +28,8 @@ const Departments: React.FC = () => {
   const [users, setUsers] = useState<UserType[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [expandedDeptIds, setExpandedDeptIds] = useState<Set<string>>(new Set());
+  const [expandedDeptIds, setExpandedDeptIds] = useState<Set<number>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Modals state
   const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
@@ -35,7 +39,8 @@ const Departments: React.FC = () => {
   // Selected entities
   const [selectedDeptForTeam, setSelectedDeptForTeam] = useState<Department | null>(null);
   const [editingDept, setEditingDept] = useState<Department | null>(null);
-  const [itemToDelete, setItemToDelete] = useState<{ type: 'DEPT' | 'TEAM', id: string } | null>(null);
+  const [editingTeam, setEditingTeam] = useState<Team | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<{ type: 'DEPT' | 'TEAM', id: number } | null>(null);
 
   // Form states
   const [deptForm, setDeptForm] = useState({ name: '', code: '', description: '' });
@@ -63,12 +68,21 @@ const Departments: React.FC = () => {
     loadData();
   }, []);
 
-  const filteredDepts = departments.filter(d => 
-    d.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    d.code.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
-  const toggleExpand = (id: string) => {
+  const filteredDepts = useMemo(() => {
+    return departments.filter(d => 
+      d.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      (d.code && d.code.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+  }, [departments, searchTerm]);
+
+  const totalPages = Math.ceil(filteredDepts.length / PAGE_SIZE);
+  const paginatedDepts = filteredDepts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const toggleExpand = (id: number) => {
     const newSet = new Set(expandedDeptIds);
     if (newSet.has(id)) newSet.delete(id);
     else newSet.add(id);
@@ -109,7 +123,15 @@ const Departments: React.FC = () => {
   // Team Handlers
   const handleAddTeam = (dept: Department) => {
     setSelectedDeptForTeam(dept);
+    setEditingTeam(null);
     setTeamForm({ name: '', leaderId: '' });
+    setIsTeamModalOpen(true);
+  };
+
+  const handleEditTeam = (team: Team, dept: Department) => {
+    setSelectedDeptForTeam(dept);
+    setEditingTeam(team);
+    setTeamForm({ name: team.name, leaderId: String(team.leaderId) });
     setIsTeamModalOpen(true);
   };
 
@@ -119,20 +141,26 @@ const Departments: React.FC = () => {
 
     setIsLoading(true);
     try {
-      await api.teams.add({
-        ...teamForm,
-        departmentId: selectedDeptForTeam.id
-      });
+      if (editingTeam) {
+        await api.teams.update(editingTeam.id, {
+          ...teamForm,
+          departmentId: selectedDeptForTeam.id
+        });
+      } else {
+        await api.teams.add({
+          ...teamForm,
+          departmentId: selectedDeptForTeam.id
+        });
+      }
       setIsTeamModalOpen(false);
       await loadData();
     } catch (err) {
-      console.error('Add team failed:', err);
+      console.error('Save team failed:', err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Delete Handlers
   const confirmDelete = async () => {
     if (!itemToDelete) return;
     setIsLoading(true);
@@ -152,8 +180,9 @@ const Departments: React.FC = () => {
     }
   };
 
-  const getLeaderName = (leaderId: string) => {
-    return users.find(u => u.id === leaderId)?.realName || '未指定负责人';
+  const getLeaderName = (leaderId: string | number) => {
+    const idStr = String(leaderId);
+    return users.find(u => String(u.id) === idStr)?.realName || '未指定负责人';
   };
 
   return (
@@ -203,8 +232,8 @@ const Departments: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredDepts.map((dept) => {
-                const deptTeams = teams.filter(t => t.departmentId === dept.id);
+              {paginatedDepts.map((dept) => {
+                const deptTeams = teams.filter(t => String(t.departmentId) === String(dept.id));
                 const isExpanded = expandedDeptIds.has(dept.id);
                 
                 return (
@@ -214,12 +243,19 @@ const Departments: React.FC = () => {
                         {isExpanded ? <ChevronDown className="w-4 h-4 text-indigo-500" /> : <ChevronRight className="w-4 h-4 text-slate-300" />}
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-3 text-sm font-black text-slate-900">
-                          <Building className="w-5 h-5 text-indigo-600" />
-                          {dept.name}
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-3 text-sm font-black text-slate-900">
+                            <Building className="w-5 h-5 text-indigo-600" />
+                            {dept.name}
+                          </div>
+                          {dept.description && (
+                            <p className="text-[10px] text-slate-400 mt-1 pl-8 italic font-medium line-clamp-1" title={dept.description}>
+                              {dept.description}
+                            </p>
+                          )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm font-mono text-indigo-600 font-bold">{dept.code}</td>
+                      <td className="px-6 py-4 text-sm font-mono text-indigo-600 font-bold">{dept.code || '-'}</td>
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center gap-1 text-sm font-bold text-slate-600">
                           <Users2 className="w-4 h-4 opacity-40" />
@@ -275,12 +311,22 @@ const Departments: React.FC = () => {
                                         </p>
                                       </div>
                                     </div>
-                                    <button 
-                                      onClick={() => { setItemToDelete({ type: 'TEAM', id: team.id }); setIsDeleteModalOpen(true); }}
-                                      className="p-1.5 text-slate-300 hover:text-rose-500 rounded-lg opacity-0 group-hover/team:opacity-100 transition-opacity"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
+                                    <div className="flex items-center gap-1 opacity-0 group-hover/team:opacity-100 transition-opacity">
+                                      <button 
+                                        onClick={() => handleEditTeam(team, dept)}
+                                        className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg"
+                                        title="修改团队"
+                                      >
+                                        <Edit2 className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button 
+                                        onClick={() => { setItemToDelete({ type: 'TEAM', id: team.id }); setIsDeleteModalOpen(true); }}
+                                        className="p-1.5 text-slate-300 hover:text-rose-500 rounded-lg"
+                                        title="删除团队"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
                                   </div>
                                 ))}
                               </div>
@@ -292,9 +338,54 @@ const Departments: React.FC = () => {
                   </React.Fragment>
                 );
               })}
+              {!isLoading && filteredDepts.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-24 text-center text-slate-400 italic font-medium">
+                    未找到匹配的部门记录
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
+
+        {/* 分页控制 UI */}
+        {totalPages > 1 && (
+          <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+            <p className="text-xs font-bold text-slate-500">
+              显示第 <span className="text-indigo-600">{(currentPage - 1) * PAGE_SIZE + 1}</span> 至 <span className="text-indigo-600">{Math.min(currentPage * PAGE_SIZE, filteredDepts.length)}</span> 条，共 <span className="text-indigo-600">{filteredDepts.length}</span> 条
+            </p>
+            <div className="flex items-center gap-1">
+              <button 
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                className="p-2 rounded-lg hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-200 disabled:opacity-30 transition-all"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              {Array.from({ length: totalPages }).map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCurrentPage(i + 1)}
+                  className={`w-8 h-8 rounded-lg text-xs font-black transition-all ${
+                    currentPage === i + 1 
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' 
+                      : 'text-slate-500 hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-200'
+                  }`}
+                >
+                  {i + 1}
+                </button>
+              ))}
+              <button 
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                className="p-2 rounded-lg hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-200 disabled:opacity-30 transition-all"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 部门管理 Modal */}
@@ -335,7 +426,7 @@ const Departments: React.FC = () => {
                 />
               </div>
               <div className="pt-4 flex flex-col gap-2">
-                <button type="submit" className="w-full py-3.5 bg-indigo-600 text-white rounded-xl font-black text-sm shadow-lg shadow-indigo-200 active:scale-95 transition-all">
+                <button type="submit" disabled={isLoading} className="w-full py-3.5 bg-indigo-600 text-white rounded-xl font-black text-sm shadow-lg shadow-indigo-200 active:scale-95 transition-all disabled:opacity-50">
                   {isLoading ? '正在保存...' : '确认保存'}
                 </button>
               </div>
@@ -344,13 +435,13 @@ const Departments: React.FC = () => {
         </div>
       )}
 
-      {/* 新增团队 Modal */}
+      {/* 新增/修改团队 Modal */}
       {isTeamModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
           <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95">
              <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                <div>
-                 <h3 className="text-lg font-black text-slate-900">创建新团队</h3>
+                 <h3 className="text-lg font-black text-slate-900">{editingTeam ? '修改业务团队' : '创建新团队'}</h3>
                  <p className="text-xs text-slate-500 mt-1">归属于: {selectedDeptForTeam?.name}</p>
                </div>
                <button onClick={() => setIsTeamModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full text-slate-400"><X className="w-5 h-5" /></button>
@@ -382,8 +473,8 @@ const Departments: React.FC = () => {
                   </select>
                 </div>
                 <div className="pt-4 flex flex-col gap-2">
-                   <button type="submit" className="w-full py-3.5 bg-indigo-600 text-white rounded-xl font-black text-sm shadow-lg shadow-indigo-200 active:scale-95 transition-all">
-                      {isLoading ? '正在保存...' : '确认创建团队'}
+                   <button type="submit" disabled={isLoading} className="w-full py-3.5 bg-indigo-600 text-white rounded-xl font-black text-sm shadow-lg shadow-indigo-200 active:scale-95 transition-all disabled:opacity-50">
+                      {isLoading ? '正在保存...' : editingTeam ? '确认修改团队' : '确认创建团队'}
                    </button>
                    <button type="button" onClick={() => setIsTeamModalOpen(false)} className="w-full py-3 text-sm font-bold text-slate-400">取消</button>
                 </div>
@@ -395,7 +486,7 @@ const Departments: React.FC = () => {
       {/* 删除确认 Modal */}
       {isDeleteModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center animate-in zoom-in-95">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-sm p-6 text-center animate-in zoom-in-95">
             <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-8 h-8" />
             </div>

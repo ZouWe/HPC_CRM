@@ -10,14 +10,15 @@ import {
   FileText,
   History,
   Building,
-  Server
+  Server,
+  AlertTriangle,
+  X
 } from 'lucide-react';
 import { User, RoleType } from './types';
 import Dashboard from './pages/Dashboard';
 import Employees from './pages/Employees';
 import Roles from './pages/Roles';
 import Customers from './pages/Customers';
-import Companies from './pages/Companies';
 import Demands from './pages/Demands';
 import Logs from './pages/Logs';
 import Departments from './pages/Departments';
@@ -45,6 +46,7 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null); 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isInitializing, setIsInitializing] = useState(true);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   // 检查已存在的 Session
   useEffect(() => {
@@ -62,7 +64,7 @@ const App: React.FC = () => {
 
   const login = async (username: string, password?: string): Promise<boolean> => {
     try {
-      const user = await api.auth.login(username, password); 
+      const user = await api.auth.login(username, password);
       if (user) {
         setCurrentUser(user);
         localStorage.setItem('fuji_user', JSON.stringify(user));
@@ -78,6 +80,7 @@ const App: React.FC = () => {
     api.auth.logout();
     localStorage.removeItem('fuji_user');
     setCurrentUser(null);
+    setIsLogoutModalOpen(false);
   };
 
   const hasPermission = (module: string): boolean => {
@@ -91,7 +94,6 @@ const App: React.FC = () => {
       case 'departments': return false;
       case 'logs': return role === RoleType.SALES_DIRECTOR;
       case 'gpu_models': return true; 
-      case 'logs': return role === RoleType.SALES_DIRECTOR;
       default: return true;
     }
   };
@@ -103,7 +105,6 @@ const App: React.FC = () => {
     { id: 'roles', label: '权限管理', icon: ShieldCheck, permission: 'roles' },
     { id: 'gpu_models', label: 'GPU配置', icon: Server, permission: 'gpu_models' },
     { id: 'customers', label: '客户管理', icon: Users2, permission: 'customers' },
-    { id: 'companies', label: '公司管理', icon: Building2, permission: 'companies' },
     { id: 'demands', label: '需求管理', icon: FileText, permission: 'demands' },
     { id: 'logs', label: '操作日志', icon: History, permission: 'logs' },
   ];
@@ -159,7 +160,7 @@ const App: React.FC = () => {
               </div>
             </div>
             <button
-              onClick={logout}
+              onClick={() => setIsLogoutModalOpen(true)}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-red-400 hover:bg-slate-800 transition-colors"
             >
               <LogOut className="w-5 h-5" />
@@ -191,7 +192,6 @@ const App: React.FC = () => {
               {activeTab === 'employees' && <Employees />}
               {activeTab === 'roles' && <Roles />}
               {activeTab === 'customers' && <Customers />}
-              {activeTab === 'companies' && <Companies />}
               {activeTab === 'demands' && <Demands />}
               {activeTab === 'gpu_models' && <GpuModels />}
               {activeTab === 'logs' && <Logs />}
@@ -199,6 +199,35 @@ const App: React.FC = () => {
           </div>
         </main>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      {isLogoutModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-8 text-center animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertTriangle className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-black text-slate-900 mb-2">安全退出系统？</h3>
+            <p className="text-slate-500 text-sm mb-8 leading-relaxed font-medium">
+              退出后需要重新验证身份。确定现在离开吗？
+            </p>
+            <div className="flex flex-col gap-2">
+              <button 
+                onClick={logout}
+                className="w-full py-3.5 bg-rose-600 text-white rounded-xl font-black shadow-lg shadow-rose-200 hover:bg-rose-700 active:scale-95 transition-all"
+              >
+                确认退出
+              </button>
+              <button 
+                onClick={() => setIsLogoutModalOpen(false)}
+                className="w-full py-3 text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                留在系统
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AuthContext.Provider>
   );
 };
